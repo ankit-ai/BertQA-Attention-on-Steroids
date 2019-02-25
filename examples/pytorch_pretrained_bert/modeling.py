@@ -345,7 +345,7 @@ class BertDecoder(nn.Module):
     def __init__(self, config):
         super(BertDecoder, self).__init__()
         layer = BertDeLayer(config)
-        self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(6)])
+        self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(7)])
 
     def forward(self, hidden_states, cattention_mask, qattention_mask, output_all_deencoded_layers=True):
         call_deencoder_layers = []
@@ -536,6 +536,25 @@ class BertLayer(nn.Module):
         layer_output = self.output(intermediate_output, attention_output)
         #print('layer_output is',layer_output.shape)
         return layer_output
+
+
+class BertSkipEncoder(nn.Module):
+    def __init__(self, config):
+        super(BertSkipEncoder, self).__init__()
+        layer = BertLayer(config)
+        self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(1)])
+
+    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True):
+        all_encoder_layers = []
+        for layer_module in self.layer:
+            hidden_states = layer_module(hidden_states, attention_mask)
+            #print('size of hidden_states in BertEncoder is',hidden_states.shape)
+            if output_all_encoded_layers:
+                all_encoder_layers.append(hidden_states)
+        if not output_all_encoded_layers:
+            all_encoder_layers.append(hidden_states)
+        return all_encoder_layers
+
 
 
 class BertEncoder(nn.Module):
@@ -876,7 +895,7 @@ class BertModel(PreTrainedBertModel):
         pooled_output = self.pooler(sequence_output)
         if not output_all_encoded_layers:
             encoded_layers = encoded_layers[-1]
-        return cextended_attention_mask,qextended_attention_mask,sequence_output#encoded_layers, pooled_output
+        return extended_attention_mask,cextended_attention_mask,qextended_attention_mask,sequence_output#encoded_layers, pooled_output
 
 
 class BertForPreTraining(PreTrainedBertModel):
@@ -1340,7 +1359,8 @@ class BertForQuestionAnswering(PreTrainedBertModel):
         self.conv1d = nn.Conv1d(in_channels=2,out_channels=1,kernel_size=3,padding=1)
         self.decoder = BertDecoder(config)
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
-
+        self.skip_encoder = BertSkipEncoder(config)
+ 
         #Freeze embedding layers of Bert
         #for param in self.bert.parameters():
         #  param.requires_grad = False
@@ -1349,8 +1369,17 @@ class BertForQuestionAnswering(PreTrainedBertModel):
 
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, start_positions=None, end_positions=None):
-        c_attention_mask,q_attention_mask,sequence_output = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+        extended_attention_mask,c_attention_mask,q_attention_mask,sequence_output = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
         #print('shape of sequence_output',sequence_output.shape)
+
+
+        encoded_skip = self.skip_encoder(sequence_output,
+                                      extended_attention_mask,
+                                      output_all_encoded_layers=False)
+
+     
+
+
         #Ankit addition - Decoder
         cdeencoded_layers,qdeencoded_layers = self.decoder(sequence_output, #2d --> 1d translated
                                       c_attention_mask,q_attention_mask,
@@ -1358,6 +1387,7 @@ class BertForQuestionAnswering(PreTrainedBertModel):
 
         cdeencoded_layers = cdeencoded_layers[-1]
         qdeencoded_layers = qdeencoded_layers[-1]
+        encoded_skip = encoded_skip[-1]
 
         cdeencoded_layers = cdeencoded_layers.unsqueeze(-1)
         qdeencoded_layers = qdeencoded_layers.unsqueeze(-1)
@@ -1381,7 +1411,7 @@ class BertForQuestionAnswering(PreTrainedBertModel):
         sequence_output1d =  sequence_output1d.reshape(encshape[0],encshape[1],encshape[2])
 
         #Skip connection with bert embeddings
-        sequence_output1d = self.LayerNorm(sequence_output + sequence_output1d)
+        sequence_output1d = self.LayerNorm(encoded_skip + sequence_output1d)
         logits = self.qa_outputs(sequence_output1d)
         #print('Dim of logits is',logits.size())
 
