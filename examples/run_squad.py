@@ -639,7 +639,12 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
     if version_2_with_negative:
         with open(output_null_log_odds_file, "w") as writer:
             writer.write(json.dumps(scores_diff_json, indent=4) + "\n")
-
+        #New code added to dump CSV
+        with open('predictions.csv', 'w') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(['Id', 'Predicted'])
+            for key, value in all_predictions.items():
+                writer.writerow([key, value])
 
 def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
     """Project the tokenized prediction back to the original text."""
