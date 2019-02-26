@@ -18,7 +18,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
+import csv
 import argparse
 import collections
 import logging
@@ -995,9 +995,9 @@ def main():
 
         model.train()
 
-    # Save a trained model
-    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+        # Save a trained model
+        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+        output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
 
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
