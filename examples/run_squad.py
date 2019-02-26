@@ -994,6 +994,11 @@ def main():
         train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
 
         model.train()
+
+    # Save a trained model
+    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 if n_gpu == 1:
@@ -1019,10 +1024,8 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
+            torch.save(model_to_save.state_dict(), output_model_file+'_'+_)
 
-    # Save a trained model
-    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
     if args.do_train:
         torch.save(model_to_save.state_dict(), output_model_file)
         # Load a trained model that you have fine-tuned
