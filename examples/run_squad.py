@@ -1024,7 +1024,7 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
-            torch.save(model_to_save.state_dict(), output_model_file+'_'+_)
+            torch.save(model_to_save.state_dict(), output_model_file+'_'+str(_))
 
     if args.do_train:
         torch.save(model_to_save.state_dict(), output_model_file)
