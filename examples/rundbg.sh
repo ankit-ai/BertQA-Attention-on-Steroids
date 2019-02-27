@@ -10,7 +10,7 @@ python run_squad.py \
   --train_batch_size 1 \
   --learning_rate 3e-5 \
   --num_train_epochs 1.0 \
-  --max_seq_length 384 \
+  --max_seq_length 512 \
   --doc_stride 128 \
   --output_dir decoder_debug_squad/ \
   --version_2_with_negative
