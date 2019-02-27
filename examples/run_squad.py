@@ -18,7 +18,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
+import csv
 import argparse
 import collections
 import logging
@@ -639,7 +639,12 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
     if version_2_with_negative:
         with open(output_null_log_odds_file, "w") as writer:
             writer.write(json.dumps(scores_diff_json, indent=4) + "\n")
-
+        #New code added to dump CSV
+        with open('predictions.csv', 'w') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(['Id', 'Predicted'])
+            for key, value in all_predictions.items():
+                writer.writerow([key, value])
 
 def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
     """Project the tokenized prediction back to the original text."""
@@ -989,6 +994,11 @@ def main():
         train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
 
         model.train()
+
+        # Save a trained model
+        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+        output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 if n_gpu == 1:
@@ -1014,10 +1024,8 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
+            torch.save(model_to_save.state_dict(), output_model_file+'_'+str(_))
 
-    # Save a trained model
-    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
     if args.do_train:
         torch.save(model_to_save.state_dict(), output_model_file)
         # Load a trained model that you have fine-tuned
