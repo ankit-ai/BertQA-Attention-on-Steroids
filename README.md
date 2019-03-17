@@ -1,0 +1,9 @@
+# BertQA - Attention on Steroids
+Developers - Ankit Chadha (ankitrc@stanford.edu) Rewa Sood (rrsood@stanford.edu)
+--------
+This repository is based off Hugging face's PyTorch BERT implementation - https://github.com/huggingface/pytorch-pretrained-BERT
+
+
+###Abstract
+--------
+In this work, we extend the Bidirectional Encoder Representations from Transformers (BERT) with an emphasis on directed coattention to obtain an improved F1 performance on the SQUAD2.0 dataset. The Transformer architecture on which BERT is based places hierarchical global attention on the concatenation of the context and query. Our additions to the BERT architecture augment this attention with a more focused context to query and query to context attention via a set of modified Transformer encoder units. In addition, we explore adding convolution based feature extraction within the coattention architecture to add localized information to self-attention. The base BERT architecture with no SQUAD2.0 specific finetuning produces results with an F1 of 74. We found that coattention significantly improves the no answer F1 by 4 points while causing a loss in the has answer F1 score by the same amount. After adding skip connections the no answer F1 improved further without causing an additional loss in has answer F1. The addition of localized feature extraction added to attention produced the best results with an overall dev F1 of 77.03 due to a marked improvement in the has answer F1 score. We applied our findings to the large BERT model which contains twice as many layers and further used our own augmented version of the SQUAD 2.0 dataset created by back translation. Finaly, we performed hyperparameter tuning and ensembled our best models for a final F1/EM of 82.148/79.239 (Attention on Steroids, PCE Test Leaderboard).
