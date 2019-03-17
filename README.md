@@ -1,7 +1,8 @@
 # BertQA - Attention on Steroids
 #### Developers - Ankit Chadha (ankitrc@stanford.edu) Rewa Sood (rrsood@stanford.edu)
 --------
-This repository is based off Hugging face's PyTorch BERT implementation - https://github.com/huggingface/pytorch-pretrained-BERT
+This repository is based off Hugging face's [PyTorch BERT implementation](https://github.com/huggingface/pytorch-pretrained-BERT)
+
 This was done as part of CS224n: Natural Language Processing with Deep Learning - Stanford / Winter 2019 class project.
 At the time of submission, we were #1 on the class's SQuAD Leaderboard.
 
@@ -16,10 +17,8 @@ Here is an overview of our network architecture
 
 ### Dataset (SQuAD 2.Q)
 --------
-We use an augmented version of the SQuAD 2.0 dataset based on the concept of Back Translation. You can download the dataset here:
-https://github.com/ankit-ai/SQUAD2.Q-Augmented-Dataset
-To read more on the process of Back Translation you can refer:
-http://ankit-ai.blogspot.com/2019/03/future-of-natural-language-processing.html
+We use an augmented version of the SQuAD 2.0 dataset based on the concept of Back Translation. You can download the dataset [here](https://github.com/ankit-ai/SQUAD2.Q-Augmented-Dataset)
+To read more on the process of Back Translation you can refer [this resource](http://ankit-ai.blogspot.com/2019/03/future-of-natural-language-processing.html)
 
 ### Command Lines
 --------
@@ -37,4 +36,5 @@ run_bertqa_expt.sh
 #Fine tunes BERT embedding layers on SQuAD 2.0 and trains additional directed co-attention layers.
 examples/run_bertqa.sh
 ```
+
 Refer to the paper for more details on our hyperparameters chosen.
