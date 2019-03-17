@@ -8,6 +8,10 @@ At the time of submission, we were #1 on the class's SQuAD Leaderboard.
 
 <img src="https://github.com/ankit-ai/BertQA-Attention-on-Steroids/blob/master/img/meme.png" width="320" height="300">
 
+--------
+<img src="https://github.com/ankit-ai/BertQA-Attention-on-Steroids/blob/master/img/poster.png">
+
+--------
 
 ### Abstract
 --------
