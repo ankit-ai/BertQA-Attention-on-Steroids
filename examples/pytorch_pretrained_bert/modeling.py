@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch BERT model."""
+"""PyTorch BERTQA - Attention on Steroids - BertForQuestionAnswering model."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -265,9 +265,10 @@ class BertDeSelfOutput(nn.Module):
         chidden_states = self.dense(chidden_states)
         chidden_states = self.dropout(chidden_states)
         chidden_states = self.LayerNorm(chidden_states + cinput_tensor)
-        qhidden_states = self.dense(qhidden_states)
-        qhidden_states = self.dropout(qhidden_states)
-        qhidden_states = self.LayerNorm(qhidden_states + cinput_tensor)
+
+        qhidden_states = self.qdense(qhidden_states)
+        qhidden_states = self.qdropout(qhidden_states)
+        qhidden_states = self.qLayerNorm(qhidden_states + qinput_tensor)
 
         return chidden_states,qhidden_states
 
@@ -334,16 +335,27 @@ class BertDeLayer(nn.Module):
         self.output = BertDeOutput(config)
 
     def forward(self, chidden_states,qhidden_states, attention_mask,qattention_mask):
+        #Calculate Masks to make it dedicated C and Q vectors respectively -- This is done to calculate C2Q and Q2C vectors
+        tmp_attention_mask = ((attention_mask + 10000.0)/10000.0)
+        tmp_qattention_mask = ((qattention_mask + 10000.0)/10000.0)
+
+        tmp_attention_mask = tmp_attention_mask.squeeze(1).contiguous()
+        tmp_attention_mask = tmp_attention_mask.permute(0,2,1).contiguous()
+
+        tmp_qattention_mask = tmp_qattention_mask.squeeze(1).contiguous()
+        tmp_qattention_mask = tmp_qattention_mask.permute(0,2,1).contiguous()
+
+        chidden_states = tmp_attention_mask * chidden_states
+        qhidden_states = tmp_qattention_mask * qhidden_states
+
         cattention_output,qattention_output = self.attention(chidden_states,qhidden_states, attention_mask,qattention_mask)
-        #Call this one more time to calculaye qattention_output^
-        #print('In DeLayer - dim of cattention_output',cattention_output.size())
         cintermediate_output,qintermediate_output = self.intermediate(cattention_output,qattention_output)
         clayer_output,qlayer_output = self.output(cintermediate_output,qintermediate_output,cattention_output,qattention_output)
         return clayer_output,qlayer_output
 
-class BertDecoder(nn.Module):
+class BertDirectedAttention(nn.Module):
     def __init__(self, config):
-        super(BertDecoder, self).__init__()
+        super(BertDirectedAttention, self).__init__()
         layer = BertDeLayer(config)
         self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(7)])
 
@@ -422,6 +434,7 @@ class BertMultiAttention(nn.Module):
     # key and value from context
 
     def forward(self, enc_hidden_states,dec_hidden_states, attention_mask,qattention_mask):
+        #--- Q2C
         #print('forward of decoder')
         #print('shape of dec_hidden_states is',dec_hidden_states.shape)
         #print('size of self.all_head_size is',self.all_head_size)
@@ -450,7 +463,7 @@ class BertMultiAttention(nn.Module):
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
-        #--- Q2C 
+        #--- C2Q 
 
         qmixed_query_layer = self.qquery(enc_hidden_states)
         qmixed_key_layer = self.qkey(dec_hidden_states)
@@ -1347,75 +1360,68 @@ class BertForQuestionAnswering(PreTrainedBertModel):
     start_logits, end_logits = model(input_ids, token_type_ids, input_mask)
     ```
     """
+
     def __init__(self, config):
         super(BertForQuestionAnswering, self).__init__(config)
         self.bert = BertModel(config)
-        self.enc_trans = nn.Linear(2*config.max_position_embeddings,config.max_position_embeddings)
+        self.decoder = BertDirectedAttention(config)
+
         # TODO check with Google if it's normal there is no dropout on the token classifier of SQuAD in the TF version
         # self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.qa_outputs = nn.Linear(config.hidden_size, 2)
-        #print('hidden size in QA is',config.hidden_size)
+        self.qa_outputs_start = nn.Linear(config.hidden_size, 1)
+        self.qa_outputs_end = nn.Linear(config.hidden_size,1)
+
         self.apply(self.init_bert_weights)
-        self.conv1d = nn.Conv1d(in_channels=2,out_channels=1,kernel_size=3,padding=1)
-        self.decoder = BertDecoder(config)
+        self.conv1d_1 = nn.Conv1d(in_channels=2*config.hidden_size,out_channels=3*config.hidden_size//2,kernel_size=3,padding=1)
+        self.conv1d_2 = nn.Conv1d(in_channels=3*config.hidden_size//2,out_channels=config.hidden_size,kernel_size=3,padding=1)
+
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
-        self.skip_encoder = BertSkipEncoder(config)
- 
-        #Freeze embedding layers of Bert
-        #for param in self.bert.parameters():
-        #  param.requires_grad = False
-        #  print(param)
+        self.endLSTM = nn.LSTM(2*config.hidden_size,config.hidden_size,num_layers=1,batch_first=True,dropout=0.1,bidirectional=False)
+
+        self.skip_encoder_start = BertSkipEncoder(config)
+        self.skip_encoder_end = BertSkipEncoder(config)
 
 
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, start_positions=None, end_positions=None):
         extended_attention_mask,c_attention_mask,q_attention_mask,sequence_output = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
-        #print('shape of sequence_output',sequence_output.shape)
 
-
-        encoded_skip = self.skip_encoder(sequence_output,
-                                      extended_attention_mask,
-                                      output_all_encoded_layers=False)
-
-     
-
-
-        #Ankit addition - Decoder
         cdeencoded_layers,qdeencoded_layers = self.decoder(sequence_output, #2d --> 1d translated
                                       c_attention_mask,q_attention_mask,
-                                      output_all_deencoded_layers=False)#output_all_encoded_layers)
+                                      output_all_deencoded_layers=False)
 
+        #Pick final C2Q and Q2C embedding vectors for the batch
         cdeencoded_layers = cdeencoded_layers[-1]
         qdeencoded_layers = qdeencoded_layers[-1]
-        encoded_skip = encoded_skip[-1]
 
         cdeencoded_layers = cdeencoded_layers.unsqueeze(-1)
         qdeencoded_layers = qdeencoded_layers.unsqueeze(-1)
         enc_cat = torch.cat((cdeencoded_layers,qdeencoded_layers), dim=-1)
-        #print('enc_cat size is',enc_cat.size())
-        #enc_cat = enc_cat.permute(0,2,1)
 
-       
         encshape = enc_cat.shape
-
-        #print('AFTERPERMUTE - enc_cat size is',enc_cat.size())
-        #sequence_output1d = self.enc_trans(enc_cat)
-        #print('Dim of sequence_output is',sequence_output1d.size())
-        enc_cat = enc_cat.reshape(-1,enc_cat.shape[2],enc_cat.shape[3]).contiguous()
-
-        #print('AFTER : enc_cat size is',enc_cat.size())
+        enc_cat = enc_cat.reshape(encshape[0],encshape[1],-1).contiguous()
         enc_cat = enc_cat.permute(0,2,1).contiguous()
-        sequence_output1d = self.conv1d(enc_cat)
-        #print('shape of sequence_output1d',sequence_output1d.shape)
-        sequence_output1d = sequence_output1d.squeeze(1).contiguous()
-        sequence_output1d =  sequence_output1d.reshape(encshape[0],encshape[1],encshape[2])
+        sequence_output1d_1 = self.conv1d_1(enc_cat)
+        sequence_output1d = self.conv1d_2(sequence_output1d_1)
 
-        #Skip connection with bert embeddings
-        sequence_output1d = self.LayerNorm(encoded_skip + sequence_output1d)
-        logits = self.qa_outputs(sequence_output1d)
-        #print('Dim of logits is',logits.size())
+        sequence_output1d = sequence_output1d.permute(0,2,1).contiguous()
 
-        start_logits, end_logits = logits.split(1, dim=-1)
+        #Skip connection from Bert Layer
+        sequence_output1d = self.LayerNorm(sequence_output1d + sequence_output)
+
+        #Flatten LSTM parameters for memory optimization
+        self.endLSTM.flatten_parameters()
+
+        #Start and End Self Attention for span predicition
+        encoded_skip_start=self.skip_encoder_start(sequence_output1d,extended_attention_mask,output_all_encoded_layers=False)
+        encoded_skip_end=self.skip_encoder_end(sequence_output1d,extended_attention_mask,output_all_encoded_layers=False)
+        for_end = torch.cat((encoded_skip_end[-1],encoded_skip_start[-1]),-1)
+
+        seq_end,_  = self.endLSTM(for_end)
+        start_logits = self.qa_outputs_start(encoded_skip_start[-1])
+        end_logits = self.qa_outputs_end(seq_end)
+
+        #Logits!
         start_logits = start_logits.squeeze(-1)
         end_logits = end_logits.squeeze(-1)
 
