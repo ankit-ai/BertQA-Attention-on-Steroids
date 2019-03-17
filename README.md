@@ -6,7 +6,8 @@ This repository is based off Hugging face's [PyTorch BERT implementation](https:
 This was done as part of CS224n: Natural Language Processing with Deep Learning - Stanford / Winter 2019 class project.
 At the time of submission, we were #1 on the class's SQuAD Leaderboard.
 
-![BERTQA Meme](https://github.com/ankit-ai/BertQA-Attention-on-Steroids/blob/master/img/meme.png=250x250 "BERTQA - Attention on Steroids Meme")
+<img src="https://github.com/ankit-ai/BertQA-Attention-on-Steroids/blob/master/img/meme.png" width="320" height="300">
+
 
 ### Abstract
 --------
