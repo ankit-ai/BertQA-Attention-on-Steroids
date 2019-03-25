@@ -45,4 +45,16 @@ run_bertqa_expt.sh
 examples/run_bertqa.sh
 ```
 
+### BibTeX
+--------
+```
+@misc{Stanford-CS224n,
+  author = {Chadha,Ankit;Sood,Rewa},
+  title = {BertQA - Attention on Steroids},
+  year = {2019},
+  publisher = {Stanford-CS224n},
+  howpublished = {\url{https://github.com/ankit-ai/BertQA-Attention-on-Steroids}}
+}
+```
+
 Refer to the paper for more details on our hyperparameters chosen.
